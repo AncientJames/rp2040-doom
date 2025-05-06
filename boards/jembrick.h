@@ -13,7 +13,7 @@
 #define J_OLED_CS 3
 #define J_OLED_RESET 4
 #define J_OLED_DC 5
-#define J_OLED_FRAME_PERIOD 5556
+#define J_OLED_FRAME_PERIOD 6600
 
 
 // --- UART ---

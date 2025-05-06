@@ -626,7 +626,7 @@ void D_DoAdvanceDemo (void)
     usergame = false;               // no save / end game here
     paused = false;
     gameaction = ga_nothing;
-
+    /*
 #if !DOOM_TINY
     // The Ultimate Doom executable changed the demo sequence to add
     // a DEMO4 demo.  Final Doom was based on Ultimate, so also
@@ -645,7 +645,11 @@ void D_DoAdvanceDemo (void)
       demosequence = (demosequence+1)%7;
     else
       demosequence = (demosequence+1)%6;
-    
+    */
+
+    // demo3 was causing trouble, so
+    demosequence = (demosequence+1)%4;
+
     switch (demosequence)
     {
       case 0:

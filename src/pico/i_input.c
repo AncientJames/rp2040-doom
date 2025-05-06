@@ -47,8 +47,8 @@ bi_decl(bi_program_feature("USB keyboard support"));
 #endif
 
 #if JEMBRICK
-#define ACCELEROMETER_SUPPORT 1
-#define PIO_CAPSENSE 1
+//#define ACCELEROMETER_SUPPORT 1
+//#define PIO_CAPSENSE 1
 #endif
 
 #if JEMRING
@@ -96,6 +96,11 @@ static uint32_t capsense_window = 2048;
 
 #define ACC_ADDR 15
 static bool acc_dir[6] = {0};
+
+int TranslateKey(int scancode);
+static int GetLocalizedKey(int scancode);
+#define WITH_SHIFT 0x8000
+
 
 void acc_press(int tilt, int scancode, int mod, int axis) {
     if (tilt > 5) {

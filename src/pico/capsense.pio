@@ -1,0 +1,136 @@
+
+.program capsense_ext
+
+    mov isr, null
+
+    set y, 1
+    in y, 1
+    in null, 21
+    mov y, isr
+    
+    mov x, !null
+    
+    resample:
+        set pindirs, 0
+        
+        busy:
+            jmp pin done
+            jmp x-- busy
+
+        done:
+            set pindirs, 1
+            set pins, 0
+            
+            jmp y-- resample
+    
+    mov isr, x
+    push block
+
+
+.program capsense_int
+
+    mov isr, null
+    
+    set y, 1
+    in y, 1
+    in null, 20
+    mov y, isr
+    
+    mov x, !null
+    
+    resample:
+        ; count the time spent outside of the busy loop
+        jmp y--, dec1
+        jmp done
+
+        dec1:
+        jmp y--, dec2
+        jmp done
+
+        dec2:
+        jmp y--, dec3
+        jmp done
+
+        dec3:
+        jmp y--, dec4
+        jmp done
+
+        dec4:
+        jmp y--, dec5
+        jmp done
+
+        dec5:
+
+
+        ; set pin to input
+        set pindirs, 0
+        
+        busy:
+            ; wait until we see it come high
+            jmp pin, high
+            jmp y--, busy
+            jmp done
+        
+        high:
+        ; set pin to output and pull low
+        set pindirs, 1
+        set pins, 0
+        
+        ; count this cycle and repeat
+        jmp x--, resample
+    
+    
+    done:
+    mov isr,x
+    push block
+
+
+% c-sdk {
+
+static inline uint capsense_program_offset(PIO pio) {
+#if JEMBRICK
+    return pio_add_program(pio, &capsense_ext_program);
+#elif JEMRING
+    return pio_add_program(pio, &capsense_int_program);
+#endif
+}
+
+static inline void capsense_program_init(PIO pio, uint sm, uint offset, uint pin) {
+
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
+    pio_gpio_init(pio, pin);
+    gpio_disable_pulls(pin);
+    gpio_set_dir(pin, GPIO_OUT);
+    gpio_put(pin, 0);
+
+#if JEMBRICK
+    pio_sm_config c = capsense_ext_program_get_default_config(offset);
+#elif JEMRING
+    pio_sm_config c = capsense_int_program_get_default_config(offset);
+#endif
+
+    sm_config_set_in_pins(&c, pin);
+    sm_config_set_out_pins(&c, pin, 1);
+    sm_config_set_set_pins(&c, pin, 1);
+    sm_config_set_jmp_pin(&c, pin);
+    sm_config_set_clkdiv(&c, 1.0f);
+
+
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline uint32_t capsense_program_read(PIO pio, uint sm) {
+    static uint32_t count[8] = {1,2,3,4,5,6,7,8};
+
+    for (int i = 0; i < 5; ++i) {
+        if (pio_sm_is_rx_fifo_empty(pio, sm)) {
+            break;
+        }
+        count[sm] = 0 - pio_sm_get(pio, sm);
+    }
+
+    return count[sm];
+}
+
+%}
