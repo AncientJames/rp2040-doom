@@ -33,6 +33,7 @@ Rename this file to lodepng.cpp to use it for C++, or to lodepng.c to use it for
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstdint>
 
 // graham ... this is slow but who cares... it does what we want - i.e. allows us to specify a destination palette not containing all the source colors
 #define NEAREST_NEIGHBOR

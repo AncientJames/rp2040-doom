@@ -34,6 +34,12 @@ target_compile_definitions(common INTERFACE
 #        DEBUG_MOBJ=1
 )
 
+if (COLOUR_MOD)
+    target_compile_definitions(common INTERFACE
+        J_COLOUR_MOD=1
+    )
+endif()
+
 if (NOT PICO_SDK)
     add_library(common_sdl INTERFACE)
     target_sources(common_sdl INTERFACE

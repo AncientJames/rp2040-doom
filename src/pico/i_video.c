@@ -44,6 +44,14 @@
 #include "w_wad.h"
 #include "z_zone.h"
 
+#if PICO_ON_DEVICE
+#ifdef J_COLOUR_MOD
+#define J_OLED_COLOUR
+#else
+#define J_OLED_MONO
+#endif
+#endif
+
 #include "pico/multicore.h"
 #include "pico/sync.h"
 #include "pico/time.h"
@@ -64,9 +72,12 @@
 
 int debugline = 39;
 
-#if PICO_ON_DEVICE
+#if defined J_OLED_MONO
 #define DISPLAYWIDTH 72
 #define DISPLAYHEIGHT 40
+#elif defined J_OLED_COLOUR
+#define DISPLAYWIDTH 96
+#define DISPLAYHEIGHT 54
 #else
 
 #if FSAA
@@ -133,7 +144,11 @@ unsigned int joywait = 0;
 pixel_t *I_VideoBuffer; // todo can't have this
 
 uint8_t __aligned(4) frame_buffer[2][SCREENWIDTH * SCREENHEIGHT];
-static uint8_t palette[256];
+#ifdef J_OLED_COLOUR
+static uint16_t display_palette[256];
+#else
+static uint8_t display_palette[256];
+#endif
 static uint8_t __scratch_x("shared_pal") shared_pal[NUM_SHARED_PALETTES][16];
 static int8_t next_pal=-1;
 
@@ -223,14 +238,23 @@ volatile uint8_t wipe_min;
 #pragma GCC optimize("O3")
 #endif
 
+#ifdef J_OLED_COLOUR
 
-static inline uint8_t crapify_rgb(uint8_t r, uint8_t g, uint8_t b) {
+static inline uint16_t display_rgb(uint8_t r, uint8_t g, uint8_t b) {
+    return (r & 0b11111000) | (g >> 5) | ((g & 0b00011100) << 11) | ((b & 0b11111000) << 5);
+}
+
+#else
+
+static inline uint8_t display_rgb(uint8_t r, uint8_t g, uint8_t b) {
     uint lum = (r*5 + g*3 + b*3) / 8;
     if (lum > 255) {
         lum = 255;
     }
     return lum;
 }
+
+#endif
 
 // this is not in flash as quite large and only once per frame
 void __noinline new_frame_init_overlays_palette_and_wipe() {
@@ -267,7 +291,7 @@ void __noinline new_frame_init_overlays_palette_and_wipe() {
                         b = gammatable[usegamma-1][b];
                     }
 
-                    palette[i] = crapify_rgb(r, g, b);
+                    display_palette[i] = display_rgb(r, g, b);
                 }
             } else {
                 int mul, r0, g0, b0;
@@ -291,7 +315,7 @@ void __noinline new_frame_init_overlays_palette_and_wipe() {
                     g += ((g0 - g) * mul) >> 16;
                     b += ((b0 - b) * mul) >> 16;
 
-                    palette[i] = crapify_rgb(r, g, b);
+                    display_palette[i] = display_rgb(r, g, b);
                 }
             }
             next_pal = -1;
@@ -301,7 +325,7 @@ void __noinline new_frame_init_overlays_palette_and_wipe() {
                 assert(vpatch_colorcount(patch) <= 16);
                 assert(vpatch_has_shared_palette(patch));
                 for (int j = 0; j < 16; j++) {
-                    shared_pal[i][j] = palette[vpatch_palette(patch)[j]];
+                    shared_pal[i][j] = display_palette[vpatch_palette(patch)[j]];
                 }
             }
         }
@@ -336,13 +360,16 @@ void __noinline new_frame_init_overlays_palette_and_wipe() {
     }
 }
 
+static void display_update(const uint8_t* const frame);
+
 //
 // I_FinishUpdate
 //
 void I_FinishUpdate (void)
 {
+#ifndef J_OLED_COLOUR
     sem_acquire_blocking(&vsync);
-
+#endif
     display_video_type = next_video_type;
     display_frame_index = next_frame_index;
     display_overlay_index = next_overlay_index;
@@ -352,7 +379,11 @@ void I_FinishUpdate (void)
         new_frame_init_overlays_palette_and_wipe();
     }
 
+#ifdef J_OLED_COLOUR
+    display_update(frame_buffer[display_frame_index]);
+#else
     sem_release(&vsync);
+#endif
 }
 
 #pragma GCC pop_options
@@ -367,9 +398,11 @@ static void __not_in_flash_func(free_buffer_callback)() {
     *((io_rw_32 *) (PPB_BASE + M0PLUS_NVIC_ISPR_OFFSET)) = 1u << LOW_PRIO_IRQ;
 }
 
-#define FRAME_PERIOD J_OLED_FRAME_PERIOD
+#ifdef J_OLED_MONO
 
-// some oleds need 2 park lines, but that's not as robust
+#define FRAME_PERIOD 6600
+
+// some oleds need 2 park lines, but that's not as robust44
 #define PARK_LINES 2
 
 static const uint8_t command_initialise[] = {
@@ -517,6 +550,200 @@ static void display_driver_init() {
 
     gpio_put(J_OLED_CS, 1);
 }
+
+#elif defined J_OLED_COLOUR
+
+#define FRAME_PERIOD 6600
+
+static const uint8_t TFT_NOP = 0x00;
+static const uint8_t TFT_SWRESET = 0x01;
+static const uint8_t TFT_RDDID = 0x04;
+static const uint8_t TFT_RDDST = 0x09;
+
+static const uint8_t TFT_SLPIN  = 0x10;
+static const uint8_t TFT_SLPOUT  = 0x11;
+static const uint8_t TFT_PTLON  = 0x12;
+static const uint8_t TFT_NORON  = 0x13;
+
+static const uint8_t TFT_INVOFF = 0x20;
+static const uint8_t TFT_INVON = 0x21;
+static const uint8_t TFT_DISPOFF = 0x28;
+static const uint8_t TFT_DISPON = 0x29;
+static const uint8_t TFT_CASET = 0x2A;
+static const uint8_t TFT_RASET = 0x2B;
+static const uint8_t TFT_RAMWR = 0x2C;
+static const uint8_t TFT_RAMRD = 0x2E;
+
+static const uint8_t TFT_VSCRDEF = 0x33;
+static const uint8_t TFT_VSCSAD = 0x37;
+
+static const uint8_t TFT_COLMOD = 0x3A;
+static const uint8_t TFT_MADCTL = 0x36;
+
+static const uint8_t TFT_FRMCTR1 = 0xB1;
+static const uint8_t TFT_FRMCTR2 = 0xB2;
+static const uint8_t TFT_FRMCTR3 = 0xB3;
+static const uint8_t TFT_INVCTR = 0xB4;
+static const uint8_t TFT_DISSET5 = 0xB6;
+
+static const uint8_t TFT_PWCTR1 = 0xC0;
+static const uint8_t TFT_PWCTR2 = 0xC1;
+static const uint8_t TFT_PWCTR3 = 0xC2;
+static const uint8_t TFT_PWCTR4 = 0xC3;
+static const uint8_t TFT_PWCTR5 = 0xC4;
+static const uint8_t TFT_VMCTR1 = 0xC5;
+
+static const uint8_t TFT_RDID1 = 0xDA;
+static const uint8_t TFT_RDID2 = 0xDB;
+static const uint8_t TFT_RDID3 = 0xDC;
+static const uint8_t TFT_RDID4 = 0xDD;
+
+static const uint8_t TFT_PWCTR6 = 0xFC;
+
+static const uint8_t TFT_GMCTRP1 = 0xE0;
+static const uint8_t TFT_GMCTRN1 = 0xE1;
+
+
+static void write_cmd(uint8_t cmd) {
+    gpio_put(J_OLED_DC, 0);
+    gpio_put(J_OLED_CS, 0);
+    spi_write_blocking(spi0, &cmd, 1);
+    gpio_put(J_OLED_CS, 1);
+}
+
+static void write_data(const uint8_t* data, size_t len) {
+    gpio_put(J_OLED_DC, 1);
+    gpio_put(J_OLED_CS, 0);
+    spi_write_blocking(spi0, data, len);
+    gpio_put(J_OLED_CS, 1);
+}
+
+
+#define WRITE_DATA(...) {\
+    const uint8_t databuf[] = { __VA_ARGS__ };\
+    write_data(databuf, sizeof(databuf));\
+}
+
+static void display_reset(void) {
+    gpio_put(J_OLED_DC, 0);
+    gpio_put(J_OLED_RESET, 1);
+    sleep_us(500);
+    gpio_put(J_OLED_RESET, 0);
+    sleep_us(500);
+    gpio_put(J_OLED_RESET, 1);
+    sleep_us(500);
+}
+
+static void display_driver_init(void) {
+    gpio_init(J_OLED_CS);
+    gpio_set_dir(J_OLED_CS, GPIO_OUT);
+    gpio_put(J_OLED_CS, 0);
+
+    gpio_init(J_OLED_RESET);
+    gpio_set_dir(J_OLED_RESET, GPIO_OUT);
+    gpio_put(J_OLED_RESET, 0);
+
+    gpio_init(J_OLED_DC);
+    gpio_set_dir(J_OLED_DC, GPIO_OUT);
+    gpio_put(J_OLED_DC, 0);
+
+    gpio_set_function(PICO_DEFAULT_SPI_SCK_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(PICO_DEFAULT_SPI_TX_PIN, GPIO_FUNC_SPI);
+    spi_init(spi0, 60000000);
+    spi_set_format(spi0, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    
+    display_reset();
+
+    write_cmd(TFT_SWRESET);
+    sleep_us(150);
+    write_cmd(TFT_SLPOUT);
+    sleep_us(500);
+
+    write_cmd(TFT_FRMCTR1);
+    WRITE_DATA(0x01, 0x2C, 0x2D);
+
+    write_cmd(TFT_FRMCTR2);
+    WRITE_DATA(0x01, 0x2C, 0x2D);
+
+    write_cmd(TFT_FRMCTR3);
+    WRITE_DATA(0x01, 0x2c, 0x2d, 0x01, 0x2c, 0x2d);
+    sleep_us(10);
+
+    write_cmd(TFT_INVCTR);
+    WRITE_DATA(0x07);
+
+    write_cmd(TFT_PWCTR1);
+    WRITE_DATA(0xA2, 0x02, 0x84);
+
+    write_cmd(TFT_PWCTR2);
+    WRITE_DATA(0xC5);
+
+    write_cmd(TFT_PWCTR3);
+    WRITE_DATA(0x0A, 0x00);
+
+    write_cmd(TFT_PWCTR4);
+    WRITE_DATA(0x8A, 0x2A);
+
+    write_cmd(TFT_PWCTR5);
+    WRITE_DATA(0x8A, 0xEE);
+
+    write_cmd(TFT_VMCTR1);
+    WRITE_DATA(0x0E);
+
+    write_cmd(TFT_INVOFF);
+
+    write_cmd(TFT_MADCTL);
+    WRITE_DATA(0xC8);
+
+    write_cmd(TFT_COLMOD);
+    WRITE_DATA(0x05);
+
+    write_cmd(TFT_CASET);
+    WRITE_DATA(0x00, 16, 0x00, 16 + DISPLAYWIDTH - 1);
+
+    write_cmd(TFT_RASET);
+    WRITE_DATA(0x00, 106, 0x00, 106 + DISPLAYHEIGHT - 1);
+
+    write_cmd(TFT_GMCTRP1);
+    WRITE_DATA(0x0f, 0x1a, 0x0f, 0x18, 0x2f, 0x28, 0x20, 0x22, 0x1f, 0x1b, 0x23, 0x37, 0x00, 0x07, 0x02, 0x10);
+
+    write_cmd(TFT_GMCTRN1);
+    WRITE_DATA(0x0f, 0x1b, 0x0f, 0x17, 0x33, 0x2c, 0x29, 0x2e, 0x30, 0x30, 0x39, 0x3f, 0x00, 0x07, 0x03, 0x10);
+    sleep_us(10);
+
+    write_cmd(TFT_DISPON);
+    sleep_us(100);
+
+    write_cmd(TFT_NORON);
+    sleep_us(10);
+
+}
+
+static uint16_t tft_buffer[DISPLAYWIDTH * DISPLAYHEIGHT];
+
+void power_on_logo(void) {
+    display_driver_init();
+    
+    
+    write_cmd(TFT_RAMWR);
+    write_data((const uint8_t*)tft_buffer, sizeof(tft_buffer));
+}
+
+static void display_update(const uint8_t* const frame) {
+
+    for (int y = 0; y < DISPLAYHEIGHT; ++y) {
+        for (int x = 0; x < DISPLAYWIDTH; ++x) {
+            tft_buffer[y * DISPLAYWIDTH + x] = display_palette[frame[y*SCREENWIDTH + x]];
+        }
+    }
+
+    write_cmd(TFT_RAMWR);
+    write_data((const uint8_t*)tft_buffer, sizeof(tft_buffer));
+
+}
+
+#endif
+
 #else
 
 //this is pure laziness - using bits of pico-host-sdl's scanline simulation instead of setting up a clean sdl loop.
@@ -545,7 +772,7 @@ static const scanvideo_mode_t bogus_mode = {
     .yscale = 1,
 };
 
-#define FRAME_PERIOD 5556
+#define FRAME_PERIOD 6600
 
 extern SDL_Window *window;
 static void display_driver_init() {
@@ -577,14 +804,14 @@ static void simulate_display(uint dither) {
                 uint lum = 0;
                 for (int aay=0; aay<(1<<FSAA); ++aay) {
                     for (int aax=0; aax<(1<<FSAA); ++aax) {
-                        lum += palette[pframe[aay*SCREENWIDTH + aax]];
+                        lum += display_palette[pframe[aay*SCREENWIDTH + aax]];
                     }
                 }
                 lum >>= (FSAA*2);
                 pframe += (1<<FSAA);
 #else
                 uint8_t *pframe = &frame_buffer[display_frame_index][y*SCREENWIDTH + x];
-                uint lum = palette[*pframe];
+                uint lum = display_palette[*pframe];
 #endif
 
                 lum = (lum >> 5) + ((lum >> 4) & dither);
@@ -618,7 +845,7 @@ static void core1() {
     uint dither = 0;
 
     while (true) {
-#if PICO_ON_DEVICE
+#if defined J_OLED_MONO
         gpio_put(J_OLED_CS, 0);
 
         gpio_put(J_OLED_DC, 0);
@@ -629,7 +856,7 @@ static void core1() {
             sem_acquire_blocking(&vsync);
         }
 
-#if PICO_ON_DEVICE
+#if defined J_OLED_MONO
         uint8_t level = 0x04 >> l;
 
         for (int p = 0; p < (DISPLAYHEIGHT / 8) ; ++p) {
@@ -645,14 +872,14 @@ static void core1() {
                     uint lum = 0;
                     for (int aay=0; aay<(1<<FSAA); ++aay) {
                         for (int aax=0; aax<(1<<FSAA); ++aax) {
-                            lum += palette[pframe[aay*SCREENWIDTH + aax]];
+                            lum += display_palette[pframe[aay*SCREENWIDTH + aax]];
                         }
                     }
                     lum >>= (FSAA*2);
                     pframe += (1<<FSAA);
 #else
                     uint8_t *pframe = &frame_buffer[display_frame_index][y*SCREENWIDTH + x];
-                    uint lum = palette[*pframe];
+                    uint lum = display_palette[*pframe];
 #endif
 
 #if TESTCARD_BAR
@@ -680,7 +907,7 @@ static void core1() {
         }
         
         command_run[1] = contrast[l];
-#else
+#elif !(PICO_ON_DEVICE)
         simulate_display(dither);
 #endif
 
@@ -693,7 +920,7 @@ static void core1() {
             sem_release(&vsync);
         }
 
-#if PICO_ON_DEVICE
+#if defined J_OLED_MONO
         gpio_put(J_OLED_DC, 1);
         spi_write_blocking(spi0, field_buffer, sizeof(field_buffer));
         gpio_put(J_OLED_DC, 0);
@@ -714,9 +941,12 @@ void I_InitGraphics(void)
     sem_init(&vsync, 1, 1);
     pd_init();
 
+
     display_driver_init();
 
+#ifndef J_OLED_COLOUR
     multicore_launch_core1(core1);
+#endif
 
 #if USE_ZONE_FOR_MALLOC
     disallow_core1_malloc = true;

@@ -1,0 +1,110 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "minsizerel-pico",
+            "displayName": "MinSizeRel for Pimoroni Tiny2040",
+            "description": "Configure for Pimoroni Tiny2040 with MinSizeRel build type",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/rp2040-build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "PICO_BOARD": "pimoroni_tiny2040",
+                "PICO_SDK_PATH": "/opt/pico-sdk",
+                "PICO_EXTRAS_PATH": "/opt/pico-extras"
+            }
+        },
+        {
+            "name": "jemring mono",
+            "displayName": "jemring mono",
+            "description": "jemring mono",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/rp2040-build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "PICO_BOARD": "jemring",
+                "PICO_SDK_PATH": "/opt/pico-sdk",
+                "PICO_EXTRAS_PATH": "/opt/pico-extras"
+            }
+
+        },
+        {
+            "name": "jemring colour",
+            "displayName": "jemring colour",
+            "description": "jemring colour",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/rp2040-build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "COLOUR_MOD": "true",
+                "PICO_BOARD": "jemring",
+                "PICO_SDK_PATH": "/opt/pico-sdk",
+                "PICO_EXTRAS_PATH": "/opt/pico-extras"
+            }
+        },
+        {
+            "name": "jembrick mono",
+            "displayName": "jembrick mono",
+            "description": "jembrick mono",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/rp2040-build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "PICO_BOARD": "jembrick",
+                "PICO_SDK_PATH": "/opt/pico-sdk",
+                "PICO_EXTRAS_PATH": "/opt/pico-extras"
+            }
+
+        },
+        {
+            "name": "jembrick colour",
+            "displayName": "jembrick colour",
+            "description": "jembrick colour",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/rp2040-build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "COLOUR_MOD": "true",
+                "PICO_BOARD": "jembrick",
+                "PICO_SDK_PATH": "/opt/pico-sdk",
+                "PICO_EXTRAS_PATH": "/opt/pico-extras"
+            }
+        },
+        {
+            "name": "thumby basic",
+            "displayName": "thumby basic",
+            "description": "thumby basic",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/rp2040-build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "PICO_BOARD": "jthumby",
+                "PICO_SDK_PATH": "/opt/pico-sdk",
+                "PICO_EXTRAS_PATH": "/opt/pico-extras"
+            }
+
+        },
+        {
+            "name": "thumby colour mod",
+            "displayName": "thumby colour mod",
+            "description": "thumby colour mod",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/rp2040-build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "COLOUR_MOD": "true",
+                "PICO_BOARD": "jthumby",
+                "PICO_SDK_PATH": "/opt/pico-sdk",
+                "PICO_EXTRAS_PATH": "/opt/pico-extras"
+            }
+
+        }
+
+
+    ]
+}

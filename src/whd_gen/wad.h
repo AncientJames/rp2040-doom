@@ -13,6 +13,8 @@
 #include <vector>
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
+
 inline std::string to_lower(std::string x) {
     std::for_each(x.begin(), x.end(), [](char & c){
         c = ::tolower(c);

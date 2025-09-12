@@ -28,8 +28,13 @@
 #define VGASCREENWIDTH 320
 #define VGASCREENHEIGHT 200
 
+#ifdef J_COLOUR_MOD
+#define SCREENWIDTH 96
+#define SCREENHEIGHT 54
+#else
 #define SCREENWIDTH 72
 #define SCREENHEIGHT 40
+#endif
 static_assert(((SCREENWIDTH)&7)==0, "");
 
 #define OVERLAY_DECIMATE 2
